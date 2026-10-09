@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CallShield AI — Scam Protection Prototype</title>
+  <style>
+    :root { color-scheme: dark; --bg:#020617; --phone:#0f172a; --card:#1e293b; --line:#334155; --text:#f8fafc; --muted:#94a3b8; --blue:#2563eb; --green:#22c55e; --amber:#f59e0b; --orange:#f97316; --red:#ef4444; }
+    * { box-sizing:border-box; margin:0; padding:0; font-family:Arial, sans-serif; }
+    body { min-height:100vh; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:18px; }
+    .phone { width:min(430px, 100%); min-height: min(850px, calc(100vh - 36px)); background:var(--phone); border:6px solid var(--line); border-radius:38px; padding:22px; display:flex; flex-direction:column; box-shadow:0 20px 65px #0008; }
+    .hidden { display:none !important; }
+    .top { text-align:center; color:var(--muted); font-size:13px; margin-bottom:16px; }
+    .brand { text-align:center; color:#38bdf8; font-size:23px; font-weight:800; margin-bottom:24px; }
+    .incoming-center { text-align:center; margin:auto 0; }
+    .avatar { width:100px; height:100px; border-radius:50%; background:#1e293b; border:3px solid #475569; display:flex; align-items:center; justify-content:center; font-size:44px; margin:0 auto 20px; }
+    .caller-name { font-size:23px; font-weight:800; }
+    .number { color:var(--muted); margin-top:9px; }
+    .notice { margin:25px auto 10px; padding:13px; max-width:290px; border:1px solid var(--amber); border-radius:11px; color:#fbbf24; background:#f59e0b14; font-size:13px; line-height:1.45; }
+    .incoming-buttons { display:flex; justify-content:space-around; gap:32px; margin-top:auto; padding:25px 0 4px; }
+    .round { width:72px; height:72px; border:0; border-radius:50%; color:white; font-size:29px; cursor:pointer; }
+    .reject { background:var(--red); } .answer { background:var(--green); }
+    .active-header { text-align:center; padding-top:4px; }
+    .active-name { font-size:21px; font-weight:800; }
+    .timer { color:var(--muted); margin-top:6px; }
+    .risk-card { background:var(--card); border-radius:15px; padding:16px; margin-top:23px; }
+    .risk-head { display:flex; justify-content:space-between; gap:12px; font-size:13px; font-weight:800; }
+    #riskText { color:var(--green); white-space:nowrap; }
+    .risk-bar { height:10px; background:var(--line); overflow:hidden; border-radius:99px; margin-top:12px; }
+    #riskFill { height:100%; width:5%; background:var(--green); transition:width .25s, background .25s; }
+    #alertBanner { margin-top:12px; padding:10px; border-radius:9px; background:#7f1d1d; color:#fee2e2; font-weight:800; font-size:13px; line-height:1.4; }
+    #threatPanel { margin-top:10px; font-size:12px; line-height:1.55; color:#fecaca; }
+    #statusLine { color:#38bdf8; font-size:12px; min-height:18px; margin:12px 2px 7px; }
+    .transcript { height:245px; overflow-y:auto; background:#020617; border:1px solid #263449; border-radius:14px; padding:14px; font-size:14px; line-height:1.55; }
+    .system-msg { color:#38bdf8; margin-bottom:9px; }
+    .caller-msg { margin:0 0 13px; overflow-wrap:anywhere; }
+    .caller-msg strong { color:#fff; }
+    .controls { display:grid; grid-template-columns:1fr; gap:10px; margin-top:14px; }
+    .btn { width:100%; border:0; border-radius:28px; color:#fff; padding:14px 12px; font-weight:800; font-size:14px; cursor:pointer; transition:filter .15s, transform .15s; }
+    .btn:hover { filter:brightness(1.08); } .btn:active { transform:scale(.99); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .demo { background:#7c3aed; } .start { background:var(--blue); } .stop { background:#64748b; } .end { background:var(--red); }
+    .footnote { text-align:center; color:#64748b; font-size:10px; margin-top:12px; line-height:1.4; }
+    @media (max-height:760px) { .phone { min-height:0; } .transcript { height:190px; } .avatar { width:80px;height:80px;font-size:36px; } .incoming-center { margin:25px 0; } }
+  </style>
+</head>
+<body>
+  <main class="phone" aria-label="CallShield AI prototype">
+    <section id="incomingCall">
+      <div class="top" id="clockText">CALLSHIELD PROTOTYPE</div>
+      <div class="brand">🛡️ CallShield AI</div>
+      <div class="incoming-center">
+        <div class="avatar">🏦</div>
+        <div class="caller-name">State Bank Security</div>
+        <div class="number">+91 98765 43210</div>
+        <div class="notice">⚠️ Demonstration caller identity. This is a simulated call, not a real phone call.</div>
+      </div>
+      <div class="incoming-buttons">
+        <button class="round reject" onclick="declineCall()" aria-label="Decline call">✕</button>
+        <button class="round answer" onclick="answerCall()" aria-label="Answer simulated call">☎</button>
+      </div>
+    </section>
+
+    <section id="activeCall" class="hidden">
+      <div class="active-header">
+        <div class="active-name">State Bank Security</div>
+        <div class="timer" id="timer">00:00</div>
+      </div>
+
+      <div class="risk-card">
+        <div class="risk-head"><span>THREAT LEVEL</span><span id="riskText">SAFE — 5%</span></div>
+        <div class="risk-bar"><div id="riskFill"></div></div>
+        <div id="alertBanner" class="hidden" role="alert">🚨 HIGH-RISK SCAM PATTERN DETECTED. Do not share codes or transfer money.</div>
+        <div id="threatPanel"></div>
+      </div>
+
+      <div id="statusLine" aria-live="polite">🛡️ Choose Demo Scenario or Start Live Listening.</div>
+      <div id="transcript" class="transcript" aria-live="polite">
+        <div class="system-msg">🛡️ CallShield is ready to analyze this conversation.</div>
+      </div>
+
+      <div class="controls">
+        <button class="btn demo" id="demoBtn" onclick="startDemo()">▶ PLAY SCAM DEMO</button>
+        <button class="btn start" id="startBtn" onclick="startListening()">🎙️ START LIVE LISTENING</button>
+        <button class="btn stop" id="stopBtn" onclick="stopListening()" disabled>⛔ STOP LISTENING</button>
+        <button class="btn end" onclick="endCall()">END CALL</button>
+      </div>
+      <div class="footnote">Prototype: browser microphone + simulated call. It does not access cellular call audio or automatically contact emergency services.</div>
+    </section>
+  </main>
+
+  <script>
+    'use strict';
+
+    let timerSeconds = 0;
+    let timerInterval = null;
+    let recognition = null;
+    let isListening = false;
+    let demoTimers = [];
+    let demoRunId = 0;
+    let transcriptLines = [];
+    let evidence = new Map();
+    let criticalAlertShown = false;
+
+    const demoMessages = [
+      'Hello sir, I am calling from State Bank Security.',
+      'We detected suspicious activity on your bank account.',
+      'Your debit card has been temporarily blocked.',
+      'I have sent a six digit OTP to your mobile.',
+      'Please tell me the OTP immediately to unblock your account.',
+      'Otherwise police action may be taken.'
+    ];
+
+    function answerCall() {
+      document.getElementById('incomingCall').classList.add('hidden');
+      document.getElementById('activeCall').classList.remove('hidden');
+      timerSeconds = 0;
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timerSeconds += 1;
+        const mm = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const ss = String(timerSeconds % 60).padStart(2, '0');
+        document.getElementById('timer').textContent = `${mm}:${ss}`;
+      }, 1000);
+      setStatus('Call simulation active. Play the demo or use live microphone.');
+    }
+
+    function declineCall() {
+      setStatusOnIncoming('Simulated call declined.');
+    }
+
+    function setStatusOnIncoming(text) {
+      // Use a small alert for the incoming-call screen only.
+      window.alert(text);
+    }
+
+    function setStatus(text) {
+      const line = document.getElementById('statusLine');
+      if (line) line.textContent = text;
+    }
+
+    function addSystemMessage(text) {
+      const box = document.getElementById('transcript');
+      const node = document.createElement('div');
+      node.className = 'system-msg';
+      node.textContent = text;
+      box.appendChild(node);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function addCallerMessage(text) {
+      const clean = String(text || '').trim();
+      if (!clean) return;
+      const box = document.getElementById('transcript');
+      const node = document.createElement('div');
+      node.className = 'caller-msg';
+      const label = document.createElement('strong');
+      label.textContent = 'Caller: ';
+      node.appendChild(label);
+      node.appendChild(document.createTextNode(clean));
+      box.appendChild(node);
+      box.scrollTop = box.scrollHeight;
+      transcriptLines.push(clean);
+      analyzeConversation();
+    }
+
+    function resetRisk() {
+      evidence = new Map();
+      criticalAlertShown = false;
+      document.getElementById('alertBanner').classList.add('hidden');
+      document.getElementById('threatPanel').innerHTML = '';
+      updateRiskUI(5, []);
+    }
+
+    function analyzeConversation() {
+      const text = transcriptLines.join(' ').toLowerCase();
+      const signals = [
+        { id: 'authority', weight: 20, title: 'Possible authority/bank impersonation', terms: ['bank', 'state bank', 'security', 'fraud department', 'cyber crime', 'inspector', 'official'] },
+        { id: 'account', weight: 15, title: 'Account blocking or freezing pressure', terms: ['blocked', 'freeze', 'frozen', 'suspended', 'deactivated'] },
+        { id: 'credentials', weight: 40, title: 'Sensitive code / credential request', terms: ['otp', 'one-time password', 'verification code', 'six digit', 'six-digit', 'upi pin', 'cvv', 'password'] },
+        { id: 'urgency', weight: 15, title: 'Urgency or pressure tactic', terms: ['immediately', 'right now', 'urgent', 'without delay', 'at once', 'do not disconnect'] },
+        { id: 'intimidation', weight: 20, title: 'Police, arrest, or legal intimidation', terms: ['police action', 'arrest', 'digital arrest', 'warrant', 'legal action', 'case will be filed'] },
+        { id: 'money', weight: 30, title: 'Money transfer / security deposit request', terms: ['transfer money', 'send money', 'security deposit', 'pay now', 'upi transfer', 'bank transfer'] },
+        { id: 'remote', weight: 30, title: 'Remote access or screen-sharing request', terms: ['anydesk', 'teamviewer', 'remote access', 'screen sharing', 'share your screen', 'install this app'] }
+      ];
+      for (const signal of signals) {
+        if (signal.terms.some(term => text.includes(term))) evidence.set(signal.id, signal);
+      }
+      const score = Math.min(100, 5 + [...evidence.values()].reduce((sum, signal) => sum + signal.weight, 0));
+      updateRiskUI(score, [...evidence.values()].map(signal => signal.title));
+    }
+
+    function updateRiskUI(score, threats) {
+      const fill = document.getElementById('riskFill');
+      const label = document.getElementById('riskText');
+      fill.style.width = `${score}%`;
+      let level, color;
+      if (score < 30) { level = 'SAFE'; color = '#22c55e'; }
+      else if (score < 55) { level = 'MEDIUM'; color = '#f59e0b'; }
+      else if (score < 80) { level = 'HIGH'; color = '#f97316'; }
+      else { level = 'CRITICAL'; color = '#ef4444'; }
+      fill.style.background = color;
+      label.style.color = color;
+      label.textContent = `${level} — ${score}%`;
+      const panel = document.getElementById('threatPanel');
+      panel.replaceChildren();
+      if (threats.length) {
+        const heading = document.createElement('div');
+        heading.textContent = 'DETECTED SIGNALS';
+        heading.style.fontWeight = '800';
+        heading.style.marginBottom = '4px';
+        panel.appendChild(heading);
+        for (const threat of threats) {
+          const item = document.createElement('div');
+          item.textContent = `• ${threat}`;
+          panel.appendChild(item);
+        }
+      }
+      if (score >= 80) {
+        document.getElementById('alertBanner').classList.remove('hidden');
+        if (!criticalAlertShown) {
+          criticalAlertShown = true;
+          setStatus('Critical pattern detected. Do not share OTP/PIN or transfer money.');
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance('Warning. High risk scam pattern detected. Do not share your OTP. Hang up and contact your bank using its official number.');
+            utterance.rate = 0.95;
+            window.speechSynthesis.speak(utterance);
+          }
+          if ('vibrate' in navigator) navigator.vibrate([250, 120, 250]);
+        }
+      } else {
+        document.getElementById('alertBanner').classList.add('hidden');
+      }
+    }
+
+    function clearDemoTimers() {
+      demoTimers.forEach(id => clearTimeout(id));
+      demoTimers = [];
+      demoRunId++;
+    }
+
+    function startDemo() {
+      if (document.getElementById('activeCall').classList.contains('hidden')) {
+        answerCall();
+      }
+      stopListening(false);
+      clearDemoTimers();
+      const thisRun = demoRunId;
+      transcriptLines = [];
+      document.getElementById('transcript').replaceChildren();
+      resetRisk();
+      addSystemMessage('▶ Demo scenario started. Incoming phrases are simulated, not a real phone call.');
+      setStatus('Demo running: analysing the conversation as each phrase arrives.');
+      demoMessages.forEach((message, index) => {
+        const id = setTimeout(() => {
+          if (thisRun !== demoRunId) return;
+          addCallerMessage(message);
+        }, 900 + index * 1800);
+        demoTimers.push(id);
+      });
+      const endId = setTimeout(() => {
+        if (thisRun === demoRunId) setStatus('Demo complete. Try Start Live Listening or End Call.');
+      }, 900 + demoMessages.length * 1800);
+      demoTimers.push(endId);
+    }
+
+    async function startListening() {
+      if (isListening) return;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setStatus('Speech recognition is unavailable in this browser. Use Play Scam Demo for a reliable demo.');
+        addSystemMessage('⚠️ This browser does not expose SpeechRecognition. Try Chrome or Edge, or use the demo scenario.');
+        return;
+      }
+      try {
+        // Request permission up front so microphone errors are clearer.
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        setStatus(`Microphone unavailable: ${error.name}. Check site permissions and Windows input device.`);
+        addSystemMessage(`🔒 Microphone access failed: ${error.name}. Allow microphone permission for localhost and check Windows Sound input.`);
+        return;
+      }
+
+      clearDemoTimers();
+      csStopOldRecognition();
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 3;
+      recognition.lang = 'en-IN';
+      recognition.onstart = () => {
+        isListening = true;
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        setStatus('🎙️ Listening. Speak one clear sentence at a time.');
+        addSystemMessage('🎙️ Live microphone listening started.');
+      };
+      recognition.onresult = event => {
+        let interim = '';
+        const finals = [];
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) finals.push(result[0].transcript.trim());
+          else interim += result[0].transcript;
+        }
+        if (interim) setStatus(`Hearing: ${interim}`);
+        finals.filter(Boolean).forEach(addCallerMessage);
+      };
+      recognition.onerror = event => {
+        setStatus(`Speech recognition error: ${event.error}. Demo mode is still available.`);
+        addSystemMessage(`⚠️ Speech recognition error: ${event.error}.`);
+      };
+      recognition.onend = () => {
+        isListening = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        if (!document.getElementById('activeCall').classList.contains('hidden')) {
+          setStatus('Listening stopped. Click Start Live Listening to try again, or Play Scam Demo.');
+        }
+      };
+      try {
+        recognition.start();
+      } catch (error) {
+        isListening = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        setStatus(`Could not start speech recognition: ${error.message}`);
+      }
+    }
+
+    function csStopOldRecognition() {
+      if (!recognition) return;
+      try { recognition.onend = null; recognition.stop(); } catch (_) { /* already stopped */ }
+      recognition = null;
+      isListening = false;
+    }
+
+    function stopListening(showMessage = true) {
+      if (recognition) {
+        try { recognition.stop(); } catch (_) { /* already stopped */ }
+      }
+      isListening = false;
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+      if (showMessage && !document.getElementById('activeCall').classList.contains('hidden')) {
+        setStatus('Microphone listening stopped.');
+        addSystemMessage('⛔ Microphone listening stopped.');
+      }
+    }
+
+    function endCall() {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      stopListening(false);
+      csStopOldRecognition();
+      clearDemoTimers();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if ('vibrate' in navigator) navigator.vibrate(0);
+      document.getElementById('activeCall').classList.add('hidden');
+      document.getElementById('incomingCall').classList.remove('hidden');
+      document.getElementById('timer').textContent = '00:00';
+      document.getElementById('transcript').replaceChildren();
+      addIncomingPlaceholder();
+      transcriptLines = [];
+      resetRisk();
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+    }
+
+    function addIncomingPlaceholder() {
+      // Keep the incoming call screen independent of the live transcript.
+    }
+  </script>
+</body>
+</html>

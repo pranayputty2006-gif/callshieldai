@@ -1,0 +1,17 @@
+{
+  "name": "callshield-ai-gemini-integration",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CallShield AI scam-protection prototype with local fallback and Gemini transcript analysis",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0"
+  }
+}
